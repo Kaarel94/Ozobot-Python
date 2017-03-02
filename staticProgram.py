@@ -41,7 +41,6 @@
 # The checksum has been found to be simply a single-byte (underflowed) running difference between the bytes
 # of the envelope, starting with zero. That is, subtract the first byte from zero,
 # subtract the second byte from this, the third from that, and so on; keeping a running value.
-from distutils import command
 from tkinter import *
 
 
