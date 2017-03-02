@@ -45,7 +45,7 @@ def calc_checksum(array):
 
 # TODO: make it possible to have longer than 256 byte programs
 def get_length_bytes(array):
-    return [0xC4, 0x00, int(hex(len(array)), 16)]
+    return [219 - len(array), 0x00, len(array)]
 
 def color(red, green, blue):
     if red > 127:
@@ -64,14 +64,38 @@ def color(red, green, blue):
 
     program.extend([int(hex(red), 16), int(hex(green), 16), int(hex(blue), 16), 0xB8])
 
-# TODO: make it possible to set wait timer
+# TODO: make it possible to set wait timer more precisely
 def wait(time):
     if time < 0:
         return
     if time > 127:
         time = 127
 
-    program.extend([int(hex(time), 16), 0x9B])
+    program.extend([time, 0x9B])
+
+def move(distance, speed):
+    if distance < 0:
+        distance = 0
+    if distance > 127:
+        distance = 127
+    if speed < 0:
+        speed = 0
+    if speed > 127:
+        speed = 127
+
+    program.extend([distance, speed, 0x9E])
+
+def rotate(degree, speed):
+    if degree < 0:
+        degree = 0
+    elif degree > 127:
+        degree = 127
+    if speed < 0:
+        speed = 0
+    elif speed > 127:
+        speed = 127
+
+    program.extend([degree, speed, 0x98])
 
 def compile():
     program.extend(KILL)
