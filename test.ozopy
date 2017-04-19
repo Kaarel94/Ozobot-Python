@@ -1,0 +1,5 @@
+x = random(1,5)
+while True:
+    color(random(0, 127), random(0, 127), random(0, 127))
+    wheels(random(0, 127), random(0,127))
+    wait(x, 0)
