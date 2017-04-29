@@ -10,9 +10,13 @@ builtins = [
     'get_surface_color',
     'terminate',
     'abs',
-    # 'follow_line_to_intersect_or_end',
-    # 'set_line_speed',
-    # 'move_straight_until_line',
+    'follow_line_to_intersect_or_end',
+    'set_line_speed',
+    'pick_direction',
+    'move_straight_until_line',
+    'there_is_way',
+    'get_line_speed',
+    'get_intersect_or_line_end_color',
 ]
 
 colors = {
@@ -49,7 +53,7 @@ class CompileException(BaseException):
 class Compiler:
     def __init__(self):
         self.bytecode = []
-        self.variable_counter = 0x25
+        self.variable_counter = 0x2a
         self.variables = {}
 
     def calc_checksum(self):
@@ -270,14 +274,12 @@ class Compiler:
             self.push(0x80)
             self.push(0)
             jump_index = len(self.bytecode) - 1
-            print(jump_index)
             self.push(0x97)
 
             for n in node.body:
                 self.compile_stmt(n)
 
             self.push(0xba)
-            print(len(self.bytecode[jump_index:]))
             self.push(256 - len(self.bytecode[jump_back_index:]) + 1)
             self.push(0x97)
 
@@ -332,21 +334,49 @@ class Compiler:
     def abs(self, value):
         self.compile_expr(value)
         self.push(0xa8)
-    #
-    # # call 00 09 00 end 01 a0 ac ad 9a 10 = if fd 00 a0 01 25 93 ;
-    # def follow_line_to_intersect_or_end(self):
-    #     length = len(self.bytecode)
-    #     self.bytecode.extend([0x90, 0x00, 0x09 + length, 0x00, 0xae, 0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x01, 0x25, 0x93, 0x91])
-    #
-    # def set_line_speed(self, speed):
-    #     self.compile_expr(speed)
-    #     self.push(0x18)
-    #     self.push(0x93)
-    #
-    # def move_straight_until_line(self, speed):
-    #     self.compile_expr(speed)
-    #     # S dup dup wheels ac 08 sensor if -8 97 96 00 00 wheels c6 01 a0 ac ad 9a 10 = if -3 97 00 a0 01 25 93
-    #     self.bytecode.extend([0x94, 0x94, 0x9f, 0xac, 0x08, 0x92, 0x80, 0xf8, 0x97, 0x96, 0x00, 0x00, 0x9f, 0xc6, 0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x97, 0x00, 0xa0, 0x01, 0x25, 0x93])
+
+    # call 00 09 00 end 01 a0 ac ad 9a 10 = if fd 00 a0 01 25 93 ;
+    def follow_line_to_intersect_or_end(self):
+        # length = len(self.bytecode)
+        # self.bytecode.extend([0x90, 0x00, 0x05, 0x00, 0xae, 0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x01, 0x29, 0x93, 0x91])
+        # self.bytecode.extend([0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x01, 0x29, 0x93])
+        self.bytecode.extend([0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x01, 0x29, 0x93])
+
+    def set_line_speed(self, speed):
+        self.compile_expr(speed)
+        self.push(0x18)
+        self.push(0x93)
+
+    def move_straight_until_line(self, speed):
+        self.compile_expr(speed)
+        # S dup dup wheels ac 08 sensor if -8 97 96 00 00 wheels c6 01 a0 ac ad 9a 10 = if -3 97 00 a0 01 25 93
+        # dup dup wheels ac 08 get if fa 97 drop 00 00 wheels c6 01 a0 ac ad 9a 10 = if fd 97 00 a0 01 29 set
+        self.bytecode.extend([0x94, 0x94, 0x9f, 0xac, 0x08, 0x92, 0x80, 0xfa, 0x97, 0x96, 0x00, 0x00, 0x9f, 0xc6, 0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x97, 0x00, 0xa0, 0x01, 0x29, 0x93])
+
+    def pick_direction(self, direction):
+        if type(direction) != Name and direction.id not in directions.keys():
+            raise CompileException('Unsupported direction', direction)
+
+        self.compile_expr(direction)
+        # dup 10 get 81 not b7 29 get not b7 1f set 01 a0 ad 9a 14 = if fd 00 a0 00 29 set
+        self.bytecode.extend([0x94, 0x10, 0x92, 0x81, 0x8a, 0xb7, 0x29, 0x92, 0x8a, 0xb7, 0x1f, 0x93, 0x01, 0xa0, 0xad, 0x9a, 0x14, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x00, 0x29, 0x93])
+
+    def there_is_way(self, direction):
+        if type(direction) != Name and direction.id not in directions.keys():
+            raise CompileException('Unsupported direction', direction)
+
+        self.push(0x10)
+        self.push(0x92)
+        self.compile_expr(direction)
+        self.push(0x81)
+
+    def get_line_speed(self):
+        self.push(0x18)
+        self.push(0x92)
+
+    def get_intersect_or_line_end_color(self):
+        self.push(0x0f)
+        self.push(0x92)
 
     def push(self, byte):
         self.bytecode.append(byte)

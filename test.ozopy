@@ -1,5 +1,15 @@
-x = random(1,5)
-while True:
-    color(random(0, 127), random(0, 127), random(0, 127))
-    wheels(random(0, 127), random(0,127))
-    wait(x, 0)
+x = 30
+move_straight_until_line(x)
+y = 60
+set_line_speed(127)
+if get_line_speed() == y:
+    color(127, 0, 0)
+    wait(2, 0)
+follow_line_to_intersect_or_end()
+if get_intersect_or_line_end_color() == BLACK:
+    color(0, 127, 0)
+    wait(2, 0)
+else:
+    color(0, 0, 127)
+    wait(2, 0)
+terminate(FOLLOW)
