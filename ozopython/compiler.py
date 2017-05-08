@@ -47,14 +47,19 @@ VERSION = [0x01, 0x03]
 KILL = [0x00, 0xAE]
 
 class CompileException(BaseException):
-    def __init__(self, msg, node):
-        super(CompileException, self).__init__("{0}:{1}".format(node.lineno - 1, node.col_offset), msg)
+    def __init__(self, msg, node = None):
+        if node is None:
+            super(CompileException, self).__init__(msg)
+        else:
+            super(CompileException, self).__init__("{0}:{1}".format(node.lineno - 1, node.col_offset), msg)
 
 class Compiler:
     def __init__(self):
         self.bytecode = []
         self.variable_counter = 0x2a
         self.variables = {}
+        self.functions = {}
+        self.compiled_functions = {}
 
     def calc_checksum(self):
         result = 0
@@ -67,13 +72,53 @@ class Compiler:
         self.bytecode.append(result)
 
     def get_length_bytes(self):
-        return [219 - len(self.bytecode), 0x00, len(self.bytecode)]
+        div = len(self.bytecode) // 256
+        remainder = (len(self.bytecode)) % 256
+        first_byte = 3
+        second_byte = 219 - len(self.bytecode)
+
+        while second_byte < 0:
+            first_byte -= 1
+            second_byte += 256
+
+        if first_byte < 0:
+            raise CompileException('Maximum bytecode length exceeded')
+
+        # return [(219 - len(self.bytecode)) % 256, len(self.bytecode) // 256, (len(self.bytecode)) % 256]
+        return [first_byte, second_byte, div, remainder]
 
     def compile(self, root):
         self.compile_stmt(root)
+
+        if len(self.bytecode) == 0:
+            return []
+
         if self.bytecode[-1] != 0xae:
             self.bytecode.extend(KILL)
-        self.bytecode = VERSION + self.get_length_bytes() + self.bytecode
+
+        # compile functions
+        for index, value in enumerate(self.bytecode):
+            if type(value) == str:
+                if value in self.compiled_functions.keys():
+                    jump_index = self.compiled_functions[value]
+                    self.bytecode[index] = 0x90
+                    self.bytecode[index + 1] = jump_index // 256
+                    self.bytecode[index + 2] = jump_index % 256
+                else:
+                    self.bytecode[index] = 0x90
+                    self.bytecode[index + 1] = len(self.bytecode) // 256
+                    self.bytecode[index + 2] = len(self.bytecode) % 256
+
+                    self.compiled_functions[value] = len(self.bytecode)
+
+                    for n in self.functions[value]:
+                        self.compile_stmt(n)
+
+                    self.push(0x91)
+
+
+
+        self.bytecode = [0x01] + self.get_length_bytes() + self.bytecode
         self.calc_checksum()
 
         return self.bytecode
@@ -90,6 +135,8 @@ class Compiler:
             self.if_stmt(node)
         elif type(node) == While:
             self.while_loop(node)
+        elif type(node) == FunctionDef:
+            self.function_def(node)
         else:
             raise CompileException('Unsupported statement type %s.\n%s' % (str(type(node)), str(vars(node))), node)
 
@@ -137,6 +184,10 @@ class Compiler:
     def call(self, node):
         if node.func.id in builtins:
             getattr(self, node.func.id)(*node.args)
+        elif node.func.id in self.functions.keys():
+            self.push(node.func.id)
+            self.push(0x00)
+            self.push(0x00)
         else:
             raise CompileException("Unknown function call %s" % node.func.id, node)
 
@@ -200,8 +251,6 @@ class Compiler:
                 self.push(0xa2)
             elif type(node.op) == Or:
                 self.push(0xa3)
-            elif type(node.op) == Not:
-                self.push(0x8a)
             else:
                 raise CompileException("Unknown operator %s" % type(node.op), node.op)
 
@@ -265,7 +314,6 @@ class Compiler:
                 self.compile_stmt(n)
             self.push(0xba)
             self.push(256 - len(self.bytecode[jump_index:]) + 1)
-            self.push(0x97)
         elif type(node.test) == NameConstant and not node.test.value:
             return
         else:
@@ -281,16 +329,18 @@ class Compiler:
 
             self.push(0xba)
             self.push(256 - len(self.bytecode[jump_back_index:]) + 1)
-            self.push(0x97)
 
             self.bytecode[jump_index] = len(self.bytecode[jump_index:]) + 1
+
+    def function_def(self, node):
+        self.functions[node.name] = node.body
+
 
     def move(self, distance, speed):
         self.compile_expr(distance)
         self.compile_expr(speed)
-        self.push(0x9E)
+        self.push(0x9e)
 
-    # S 100 wait 1 - dup 00 > not if -8 97 96 T wait
     def wait(self, seconds, centisec):
         self.compile_expr(seconds)
 
@@ -300,13 +350,13 @@ class Compiler:
             self.bytecode.extend([0x64, 0x9b, 0x1, 0x86, 0x94, 0x0, 0x9d, 0x8a, 0x80, 0xf8, 0x97, 0x96])
 
         self.compile_expr(centisec)
-        self.push(0x9B)
+        self.push(0x9b)
 
     def color(self, red, green, blue):
         self.compile_expr(red)
         self.compile_expr(green)
         self.compile_expr(blue)
-        self.push(0xB8)
+        self.push(0xb8)
 
     def rotate(self, degree, speed):
         self.compile_expr(degree)
@@ -324,7 +374,7 @@ class Compiler:
         self.push(0x8c)
 
     def get_surface_color(self):
-        self.push(0xe)
+        self.push(0x0e)
         self.push(0x92)
 
     def terminate(self, value):
@@ -335,11 +385,7 @@ class Compiler:
         self.compile_expr(value)
         self.push(0xa8)
 
-    # call 00 09 00 end 01 a0 ac ad 9a 10 = if fd 00 a0 01 25 93 ;
     def follow_line_to_intersect_or_end(self):
-        # length = len(self.bytecode)
-        # self.bytecode.extend([0x90, 0x00, 0x05, 0x00, 0xae, 0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x01, 0x29, 0x93, 0x91])
-        # self.bytecode.extend([0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x01, 0x29, 0x93])
         self.bytecode.extend([0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x01, 0x29, 0x93])
 
     def set_line_speed(self, speed):
@@ -349,8 +395,6 @@ class Compiler:
 
     def move_straight_until_line(self, speed):
         self.compile_expr(speed)
-        # S dup dup wheels ac 08 sensor if -8 97 96 00 00 wheels c6 01 a0 ac ad 9a 10 = if -3 97 00 a0 01 25 93
-        # dup dup wheels ac 08 get if fa 97 drop 00 00 wheels c6 01 a0 ac ad 9a 10 = if fd 97 00 a0 01 29 set
         self.bytecode.extend([0x94, 0x94, 0x9f, 0xac, 0x08, 0x92, 0x80, 0xfa, 0x97, 0x96, 0x00, 0x00, 0x9f, 0xc6, 0x01, 0xa0, 0xac, 0xad, 0x9a, 0x10, 0xa4, 0x80, 0xfd, 0x97, 0x00, 0xa0, 0x01, 0x29, 0x93])
 
     def pick_direction(self, direction):
@@ -358,7 +402,6 @@ class Compiler:
             raise CompileException('Unsupported direction', direction)
 
         self.compile_expr(direction)
-        # dup 10 get 81 not b7 29 get not b7 1f set 01 a0 ad 9a 14 = if fd 00 a0 00 29 set
         self.bytecode.extend([0x94, 0x10, 0x92, 0x81, 0x8a, 0xb7, 0x29, 0x92, 0x8a, 0xb7, 0x1f, 0x93, 0x01, 0xa0, 0xad, 0x9a, 0x14, 0xa4, 0x80, 0xfd, 0x00, 0xa0, 0x00, 0x29, 0x93])
 
     def there_is_way(self, direction):

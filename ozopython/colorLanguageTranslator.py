@@ -4,8 +4,17 @@ class ColorLanguageTranslator:
 
     @staticmethod
     def base7(num):
-        numerals = "0123456"
-        return ((num == 0) and numerals[0]) or (ColorLanguageTranslator.base7(num // 7).lstrip(numerals[0]) + numerals[num % 7])
+        if num == 0:
+            return '0'
+
+        new_num_string = ''
+        current = num
+        while current != 0:
+            remainder = current % 7
+            remainder_string = str(remainder)
+            new_num_string = remainder_string + new_num_string
+            current //= 7
+        return new_num_string
 
     # Function for converting a base-7 number(given as a string) to a 3 digit color code:
     @staticmethod
@@ -31,7 +40,7 @@ class ColorLanguageTranslator:
 
     @staticmethod
     def translate(byte_array):
-        color_sequence = "".join([ColorLanguageTranslator.base7_to_color_code(ColorLanguageTranslator.base7(int(str(x)))) for x in byte_array])
+        color_sequence = "".join([ColorLanguageTranslator.base7_to_color_code(ColorLanguageTranslator.base7(x)) for x in byte_array])
 
         sequence_with_repetition = ColorLanguageTranslator.START + color_sequence + ColorLanguageTranslator.END
 
