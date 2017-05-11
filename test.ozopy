@@ -1,12 +1,20 @@
 def f():
-    wheels(x, x)
-    wait(y, 0)
+    if get_surface_color() == BLACK:
+        color(0, 0, 0)
+    if get_surface_color() == RED:
+        color(127, 0, 0)
+    if get_surface_color() == GREEN:
+        color(0, 127, 0)
+    if get_surface_color() == BLUE:
+        color(0, 0, 127)
+    if get_surface_color() == WHITE:
+        color(127, 127, 127)
+    if get_surface_color() == YELLOW:
+        color(127, 127, 0)
+    if get_surface_color() == CYAN:
+        color(0, 127, 127)
+    if get_surface_color() == MAGENTA:
+        color(127, 0, 127)
 
-def g():
-    wheels(100, 100)
-    wait(2, 0)
-    y = 2
+while True:
     f()
-
-x = 40
-g()
