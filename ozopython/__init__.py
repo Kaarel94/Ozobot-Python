@@ -34,7 +34,10 @@ def run(filename):
     progress["maximum"] = len(colorcode)
 
     button = Button(window, text="Load", command=lambda: load(colorcode, progress))
-    button.pack()
+    button.pack(pady=5)
+    
+    exit = Button(window, text="Exit", command=lambda: quit())
+    exit.pack(side="bottom",pady=5)
 
     progress.pack()
 
