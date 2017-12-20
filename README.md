@@ -70,7 +70,7 @@ Turning the LED off is simply `color(0, 0, 0)`
 ### Conditional statements and logic
 
 Standard Python `if` and `else` blocks are supported but the `elif` keyword is not.
-Also the standart Python boolean operations `and`, `or` and `not` and comparison operators `<`, `>`, `==`, `<=`, `>=` and `!=` are supported.
+Also the standard Python boolean operations `and`, `or` and `not` and comparison operators `<`, `>`, `==`, `<=`, `>=` and `!=` are supported.
 
 ### Loops
 
